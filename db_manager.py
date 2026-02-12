@@ -8,6 +8,8 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Iterator
 
+from app_paths import get_app_data_dir
+
 # 配置日志
 logger = logging.getLogger(__name__)
 
@@ -17,10 +19,29 @@ class DatabaseManager:
     
     def __init__(self, db_file='word_card.db'):
         """初始化数据库管理器"""
-        # 数据库文件路径（保存在应用目录）
-        self.app_dir = Path(__file__).parent
+        # 打包后使用固定数据目录，保证每次打开读取同一数据库
+        self.app_dir = get_app_data_dir()
         self.db_file = self.app_dir / db_file
+        
+        # 自动迁移：如果项目目录下有数据库但目标位置没有，自动迁移
+        self._migrate_from_project_dir(db_file)
+        
         self.init_database()
+    
+    def _migrate_from_project_dir(self, db_file: str):
+        """从项目目录迁移数据库到统一数据目录（如果存在）"""
+        try:
+            # 尝试找到项目目录（包含 main.py 的目录）
+            project_db = Path(__file__).parent / db_file
+            
+            # 如果项目目录下有数据库，且目标位置没有数据库，则迁移
+            if project_db.exists() and not self.db_file.exists():
+                import shutil
+                logger.info(f"检测到项目目录下的数据库，正在迁移到: {self.db_file}")
+                shutil.copy2(project_db, self.db_file)
+                logger.info("数据库迁移完成")
+        except Exception as e:
+            logger.warning(f"数据库迁移失败（可忽略）: {e}")
     
     def get_connection(self) -> sqlite3.Connection:
         """获取数据库连接"""
@@ -96,18 +117,31 @@ class DatabaseManager:
             conn.commit()
             logger.info("数据库初始化完成")
     
-    def add_word(self, word: str, meaning: str) -> Optional[int]:
-        """添加单词，返回单词ID"""
+    def word_exists(self, word: str) -> bool:
+        """检查单词是否已存在（不区分大小写）"""
         with self._db_connection() as conn:
             cursor = conn.cursor()
-            now = datetime.now()
-            # 设置 next_review 为昨天，确保新添加的单词显示为红色（需要复习）
-            yesterday = (now - timedelta(days=1)).isoformat()
+            cursor.execute('SELECT COUNT(*) FROM words WHERE LOWER(word) = LOWER(?)', (word.strip(),))
+            return cursor.fetchone()[0] > 0
+    
+    def add_word(self, word: str, meaning: str) -> Optional[int]:
+        """添加单词，返回单词ID"""
+        # 去除前后空格
+        word = word.strip()
+        meaning = meaning.strip()
+        
+        if not word or not meaning:
+            return None
+            
+        with self._db_connection() as conn:
+            cursor = conn.cursor()
+            now = datetime.now().isoformat()
+            yesterday = (datetime.now() - timedelta(days=1)).isoformat()
             cursor.execute('''
                 INSERT OR IGNORE INTO words 
                 (word, meaning, next_review, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (word, meaning, yesterday, now.isoformat(), now.isoformat()))
+            ''', (word, meaning, yesterday, now, now))
             conn.commit()
             return cursor.lastrowid if cursor.rowcount > 0 else None
     
@@ -124,9 +158,8 @@ class DatabaseManager:
         """
         with self._db_connection() as conn:
             cursor = conn.cursor()
-            now = datetime.now()
-            yesterday = (now - timedelta(days=1)).isoformat()
-            now_str = now.isoformat()
+            now = datetime.now().isoformat()
+            yesterday = (datetime.now() - timedelta(days=1)).isoformat()
             
             total = len(words_list)
             added = 0
@@ -135,11 +168,16 @@ class DatabaseManager:
                 batch = words_list[i:i + batch_size]
                 for word, meaning in batch:
                     try:
+                        # 去除前后空格
+                        word = word.strip() if word else ''
+                        meaning = meaning.strip() if meaning else ''
+                        if not word or not meaning:
+                            continue
                         cursor.execute('''
                             INSERT OR IGNORE INTO words 
                             (word, meaning, next_review, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?)
-                        ''', (word, meaning, yesterday, now_str, now_str))
+                        ''', (word, meaning, yesterday, now, now))
                         if cursor.rowcount > 0:
                             added += 1
                     except Exception as e:
@@ -317,6 +355,7 @@ class DatabaseManager:
         
         with self._db_connection() as conn:
             cursor = conn.cursor()
+            now = datetime.now().isoformat()
             for word_data in words:
                 # 处理日期格式
                 next_review = word_data.get('next_review')
@@ -324,11 +363,11 @@ class DatabaseManager:
                     try:
                         datetime.fromisoformat(next_review)
                     except ValueError:
-                        next_review = datetime.now().isoformat()
+                        next_review = now
                 elif isinstance(next_review, datetime):
                     next_review = next_review.isoformat()
                 else:
-                    next_review = datetime.now().isoformat()
+                    next_review = now
                 
                 last_review = word_data.get('last_review')
                 if isinstance(last_review, str):
@@ -355,8 +394,8 @@ class DatabaseManager:
                     next_review,
                     1 if word_data.get('mastered', False) else 0,
                     last_review,
-                    datetime.now().isoformat(),
-                    datetime.now().isoformat()
+                    now,
+                    now
                 ))
             
             # 迁移当前索引

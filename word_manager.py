@@ -136,7 +136,6 @@ class WordManager:
             interval = 1
             ease_factor = max(1.3, ease_factor - 0.2)
             mastered = False
-            # 设置为昨天，确保显示红色（需要复习）
             next_review = (datetime.now() - timedelta(days=1)).isoformat()
         else:  # 掌握 (quality == 2)
             # 根据复习次数增加间隔
@@ -149,14 +148,11 @@ class WordManager:
             else:
                 interval = int(interval * ease_factor)
             
-            # 提高难度系数
             ease_factor = min(2.5, ease_factor + 0.15)
             
-            # 如果间隔足够长且复习次数足够，标记为已掌握
             if interval >= 30 and review_count >= 5:
                 mastered = True
             
-            # 计算下次复习时间（未来）
             next_review = (datetime.now() + timedelta(days=interval)).isoformat()
         
         last_review = datetime.now().isoformat()
@@ -187,12 +183,8 @@ class WordManager:
             next_review_str = w.get('next_review')
             if next_review_str:
                 try:
-                    if isinstance(next_review_str, str):
-                        next_review = datetime.fromisoformat(next_review_str)
-                    else:
-                        next_review = next_review_str
-                    
-                    if next_review <= now and not w.get('mastered', False):
+                    next_review_dt = datetime.fromisoformat(next_review_str) if isinstance(next_review_str, str) else next_review_str
+                    if next_review_dt <= now and not w.get('mastered', False):
                         result.append(w)
                 except (ValueError, TypeError):
                     pass

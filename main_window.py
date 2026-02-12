@@ -360,13 +360,10 @@ class MainWindow(QMainWindow):
             
             # 格式化时间
             try:
-                if isinstance(review_time, str):
-                    dt = datetime.fromisoformat(review_time)
-                    time_str = dt.strftime('%H:%M')
-                else:
-                    time_str = str(review_time)
-            except:
-                time_str = review_time
+                dt = datetime.fromisoformat(review_time) if isinstance(review_time, str) else review_time
+                time_str = dt.strftime('%H:%M') if isinstance(dt, datetime) else str(review_time)
+            except (ValueError, TypeError):
+                time_str = str(review_time)
             
             record_line = f"{time_str} - {word}: {rating_text}\n"
             self.record_text.append(record_line)
@@ -390,21 +387,13 @@ class MainWindow(QMainWindow):
             word = word_data['word']
             next_review = word_data.get('next_review')
             
-            # 解析日期
-            next_review_dt = None
+            # 解析日期，如果解析失败或不存在，视为需要复习
             if next_review:
-                if isinstance(next_review, str):
-                    try:
-                        next_review_dt = datetime.fromisoformat(next_review)
-                    except (ValueError, AttributeError):
-                        # 如果解析失败，视为需要复习
-                        next_review_dt = datetime.now() - timedelta(days=1)
-                elif isinstance(next_review, datetime):
-                    next_review_dt = next_review
-                else:
+                try:
+                    next_review_dt = datetime.fromisoformat(next_review) if isinstance(next_review, str) else next_review
+                except (ValueError, TypeError):
                     next_review_dt = datetime.now() - timedelta(days=1)
             else:
-                # 如果没有设置下次复习时间，视为需要复习
                 next_review_dt = datetime.now() - timedelta(days=1)
             
             # 显示待复习标记
@@ -591,11 +580,17 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, '输入错误', '单词和释义不能为空！')
                 return
             
-            self.word_manager.add_word(word, meaning)
-            self.word_manager._invalidate_cache()  # 清除缓存
-            self.save_data()
-            self.update_display()
-            self.statusBar().showMessage(f'已添加: {word}')
+            # 检查单词是否已存在
+            if self.db_manager.word_exists(word):
+                QMessageBox.information(self, '提示', f'单词 "{word}" 已存在')
+                return
+            
+            word_id = self.word_manager.add_word(word, meaning)
+            if word_id:
+                self.word_manager._invalidate_cache()  # 清除缓存
+                self.save_data()
+                self.update_display()
+                self.statusBar().showMessage(f'已添加: {word}')
         
     def delete_word(self):
         """删除单词"""
@@ -670,16 +665,27 @@ class MainWindow(QMainWindow):
                         words.append({'word': word.strip(), 'meaning': meaning.strip()})
             
             count = 0
+            skipped = 0
             for word_data in words:
                 if 'word' in word_data and 'meaning' in word_data:
-                    self.word_manager.add_word(word_data['word'], word_data['meaning'])
-                    count += 1
+                    word = word_data['word'].strip()
+                    meaning = word_data['meaning'].strip()
+                    if word and meaning:
+                        if not self.db_manager.word_exists(word):
+                            self.word_manager.add_word(word, meaning)
+                            count += 1
+                        else:
+                            skipped += 1
             
             # 清除缓存以刷新显示
             self.word_manager._invalidate_cache()
             self.save_data()
             self.update_display()
-            QMessageBox.information(self, '导入成功', f'成功导入 {count} 个单词')
+            
+            if skipped > 0:
+                QMessageBox.information(self, '导入完成', f'成功导入 {count} 个单词\n跳过 {skipped} 个重复单词')
+            else:
+                QMessageBox.information(self, '导入成功', f'成功导入 {count} 个单词')
             self.statusBar().showMessage(f'已导入 {count} 个单词')
             
         except Exception as e:

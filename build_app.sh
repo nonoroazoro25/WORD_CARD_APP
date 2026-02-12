@@ -24,10 +24,12 @@ else
     exit 1
 fi
 
-# 检查是否安装了 PyInstaller
-if ! python -m pyinstaller --version &>/dev/null; then
-    echo "正在安装 PyInstaller..."
-    pip install pyinstaller
+# 检查虚拟环境中是否已安装 PyInstaller
+if ! python -m PyInstaller --version &>/dev/null; then
+    echo "错误: 虚拟环境中未找到 PyInstaller。"
+    echo "请先安装: pip install pyinstaller"
+    echo "或安装全部依赖: pip install -r requirements.txt"
+    exit 1
 fi
 
 # 清理之前的构建（保留 .spec 文件）
@@ -44,10 +46,19 @@ if [ -d "dist/单词卡片.app" ]; then
     echo ""
     echo "✓ 打包成功！"
     echo "应用位置: $(pwd)/dist/单词卡片.app"
+    
+    # 刷新 macOS Launch Services 缓存（可选，但有助于解决启动问题）
+    echo "正在刷新系统缓存..."
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "dist/单词卡片.app" 2>/dev/null || true
+    
     echo ""
     echo "你可以："
     echo "1. 双击 dist/单词卡片.app 来运行应用"
     echo "2. 将 dist/单词卡片.app 拖拽到应用程序文件夹"
+    echo ""
+    echo "如果双击无法启动，可以尝试："
+    echo "  - 右键点击 .app，选择'打开'（绕过 Gatekeeper）"
+    echo "  - 或者直接运行: open 'dist/单词卡片.app'"
     echo ""
 else
     echo "✗ 打包失败，请检查错误信息"

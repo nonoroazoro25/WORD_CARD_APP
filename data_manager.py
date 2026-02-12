@@ -1,17 +1,18 @@
 """
-数据管理器 - 负责数据的保存和加载
+数据管理器 - 负责数据的保存和加载（仅用于迁移）
 """
 import json
-import os
 from pathlib import Path
+
+from app_paths import get_app_data_dir
 
 
 class DataManager:
     """数据管理器"""
     
     def __init__(self, data_file='word_data.json'):
-        # 数据文件路径（保存在应用目录）
-        self.app_dir = Path(__file__).parent
+        # 与数据库使用同一数据目录，打包后路径固定
+        self.app_dir = get_app_data_dir()
         self.data_file = self.app_dir / data_file
         
     def save(self, data):

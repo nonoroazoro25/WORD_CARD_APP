@@ -1,14 +1,33 @@
 """
 单词卡片组件 - 可翻转的卡片界面
 """
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QColor, QPalette
+from PyQt5.QtGui import QFont
 
 
 class WordCard(QWidget):
     """单词卡片组件"""
     card_flipped = pyqtSignal(bool)  # 卡片翻转信号
+    
+    # 样式常量
+    CARD_BASE_STYLE = """
+        QLabel {{
+            border: 3px solid #4ecdc4;
+            border-radius: 15px;
+            padding: 40px;
+            min-height: 300px;
+            {}
+        }}
+    """
+    
+    CARD_WORD_STYLE = CARD_BASE_STYLE.format(
+        "background-color: white; font-size: 32px; color: #2c3e50;"
+    )
+    
+    CARD_MEANING_STYLE = CARD_BASE_STYLE.format(
+        "background-color: #f0f8ff; font-size: 20px; color: #333;"
+    )
     
     def __init__(self):
         super().__init__()
@@ -25,16 +44,6 @@ class WordCard(QWidget):
         self.card_label = QLabel()
         self.card_label.setAlignment(Qt.AlignCenter)
         self.card_label.setWordWrap(True)
-        self.card_label.setStyleSheet("""
-            QLabel {
-                background-color: white;
-                border: 3px solid #4ecdc4;
-                border-radius: 15px;
-                padding: 40px;
-                font-size: 24px;
-                min-height: 300px;
-            }
-        """)
         
         # 设置字体
         font = QFont('Arial', 24, QFont.Bold)
@@ -75,30 +84,10 @@ class WordCard(QWidget):
         if self.is_flipped:
             # 显示释义
             self.card_label.setText(self.meaning)
-            self.card_label.setStyleSheet("""
-                QLabel {
-                    background-color: #f0f8ff;
-                    border: 3px solid #4ecdc4;
-                    border-radius: 15px;
-                    padding: 40px;
-                    font-size: 20px;
-                    min-height: 300px;
-                    color: #333;
-                }
-            """)
+            self.card_label.setStyleSheet(self.CARD_MEANING_STYLE)
             self.hint_label.setText('已显示释义')
         else:
             # 显示单词
             self.card_label.setText(self.word)
-            self.card_label.setStyleSheet("""
-                QLabel {
-                    background-color: white;
-                    border: 3px solid #4ecdc4;
-                    border-radius: 15px;
-                    padding: 40px;
-                    font-size: 32px;
-                    min-height: 300px;
-                    color: #2c3e50;
-                }
-            """)
+            self.card_label.setStyleSheet(self.CARD_WORD_STYLE)
             self.hint_label.setText('点击"翻转"按钮查看释义')
