@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(card_panel)
         splitter.addWidget(stats_panel)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(1, 3)  # 单词卡片区域稍宽
         splitter.setStretchFactor(2, 1)
         
         main_layout.addWidget(splitter)
@@ -187,6 +187,7 @@ class MainWindow(QMainWindow):
     def create_card_panel(self):
         """创建中间面板：单词卡片"""
         panel = QWidget()
+        panel.setMinimumWidth(420)  # 保证卡片有足够宽度
         layout = QVBoxLayout(panel)
         
         # 标题
@@ -200,24 +201,17 @@ class MainWindow(QMainWindow):
         self.word_card.card_flipped.connect(self.on_card_flipped)
         layout.addWidget(self.word_card, stretch=1)
         
-        # 操作按钮
+        # 操作按钮（点击卡片可翻转）
         btn_layout = QHBoxLayout()
-        
-        # 上一个
+        btn_layout.addStretch(1)
         btn_prev = QPushButton('◀ 上一个')
         btn_prev.clicked.connect(self.prev_word)
         btn_layout.addWidget(btn_prev)
-        
-        # 翻卡
-        btn_flip = QPushButton('🔄 翻转')
-        btn_flip.clicked.connect(self.flip_card)
-        btn_layout.addWidget(btn_flip)
-        
-        # 下一个
+        btn_layout.addSpacing(20)
         btn_next = QPushButton('下一个 ▶')
         btn_next.clicked.connect(self.next_word)
         btn_layout.addWidget(btn_next)
-        
+        btn_layout.addStretch(1)
         layout.addLayout(btn_layout)
         
         # 记忆反馈按钮
@@ -470,10 +464,6 @@ class MainWindow(QMainWindow):
         row = self.word_list.row(item)
         self.word_manager.current_index = row
         self.show_current_card()
-        
-    def flip_card(self):
-        """翻转卡片"""
-        self.word_card.flip()
         
     def on_card_flipped(self, is_flipped):
         """卡片翻转事件"""

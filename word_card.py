@@ -44,6 +44,7 @@ class WordCard(QWidget):
         self.card_label = QLabel()
         self.card_label.setAlignment(Qt.AlignCenter)
         self.card_label.setWordWrap(True)
+        self.card_label.setCursor(Qt.PointingHandCursor)  # 鼠标悬停时显示手型光标
         
         # 设置字体
         font = QFont('Arial', 24, QFont.Bold)
@@ -52,10 +53,16 @@ class WordCard(QWidget):
         layout.addWidget(self.card_label)
         
         # 提示文字
-        self.hint_label = QLabel('点击"翻转"按钮查看释义')
+        self.hint_label = QLabel('点击卡片查看释义')
         self.hint_label.setAlignment(Qt.AlignCenter)
         self.hint_label.setStyleSheet("color: #888; font-size: 12px;")
         layout.addWidget(self.hint_label)
+    
+    def mousePressEvent(self, event):
+        """鼠标点击事件 - 点击卡片区域即可翻转"""
+        if self.word:  # 只有在有单词时才允许翻转
+            self.flip()
+        super().mousePressEvent(event)
         
     def set_word(self, word, meaning):
         """设置单词和释义"""
@@ -85,9 +92,9 @@ class WordCard(QWidget):
             # 显示释义
             self.card_label.setText(self.meaning)
             self.card_label.setStyleSheet(self.CARD_MEANING_STYLE)
-            self.hint_label.setText('已显示释义')
+            self.hint_label.setText('点击卡片返回单词')
         else:
             # 显示单词
             self.card_label.setText(self.word)
             self.card_label.setStyleSheet(self.CARD_WORD_STYLE)
-            self.hint_label.setText('点击"翻转"按钮查看释义')
+            self.hint_label.setText('点击卡片查看释义')
