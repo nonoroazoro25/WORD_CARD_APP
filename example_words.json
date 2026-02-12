@@ -1,0 +1,14 @@
+{
+  "words": [
+    {"word": "apple", "meaning": "苹果"},
+    {"word": "banana", "meaning": "香蕉"},
+    {"word": "orange", "meaning": "橙子"},
+    {"word": "hello", "meaning": "你好"},
+    {"word": "world", "meaning": "世界"},
+    {"word": "computer", "meaning": "电脑"},
+    {"word": "programming", "meaning": "编程"},
+    {"word": "python", "meaning": "Python（编程语言）"},
+    {"word": "learning", "meaning": "学习"},
+    {"word": "practice", "meaning": "练习"}
+  ]
+}

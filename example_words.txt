@@ -1,0 +1,15 @@
+apple|苹果
+banana|香蕉
+orange|橙子
+hello|你好
+world|世界
+computer|电脑
+programming|编程
+python|Python（编程语言）
+learning|学习
+practice|练习
+memory|记忆
+vocabulary|词汇
+fluent|流利的
+pronunciation|发音
+grammar|语法
