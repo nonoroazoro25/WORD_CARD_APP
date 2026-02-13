@@ -66,32 +66,22 @@ class PieChartWidget(QWidget):
             painter.drawText(rect, Qt.AlignCenter, '暂无数据')
             return
         
-        # 饼图按总单词数比例画，使中心“已掌握%”= 已掌握/总数 与扇形一致
+        # 饼图两种颜色：待学习 + 已掌握
         total = max(self._total, 1)
-        # 已掌握扇形（占比 = 已掌握/总数）
         mastered_span = int((self._mastered_count / total) * 360 * 16)
-        # 剩余角度分给 新单词 和 待复习（按二者在“未掌握”中的比例）
-        rest = self._total - self._mastered_count
         rest_angle = 360 * 16 - mastered_span
-        if rest <= 0:
-            new_span = 0
-            review_span = 0
-        else:
-            new_span = int((self._new_count / rest) * rest_angle)
-            review_span = rest_angle - new_span
         start_angle = 90 * 16
-        # 绘制顺序：新单词、待复习、已掌握（与之前一致）
-        for color, span in [
-            (QColor(126, 184, 218), new_span),
-            (QColor(255, 138, 128), review_span),
-            (PIE_MASTERED_COLOR, mastered_span),
-        ]:
-            if span <= 0:
-                continue
-            painter.setBrush(QBrush(color))
+        # 待学习（中性灰）
+        if rest_angle > 0:
+            painter.setBrush(QBrush(QColor(200, 200, 200)))
             painter.setPen(QPen(QColor(220, 220, 220), 1))
-            painter.drawPie(rect, start_angle, span)
-            start_angle += span
+            painter.drawPie(rect, start_angle, rest_angle)
+            start_angle += rest_angle
+        # 已掌握（绿色）
+        if mastered_span > 0:
+            painter.setBrush(QBrush(PIE_MASTERED_COLOR))
+            painter.setPen(QPen(QColor(220, 220, 220), 1))
+            painter.drawPie(rect, start_angle, mastered_span)
         
         # 中心：已掌握比例 = 已掌握数 / 总单词数（与扇形一致）
         cx, cy = rect.center().x(), rect.center().y()
