@@ -1,20 +1,111 @@
 """
 主窗口 - 单词卡片应用界面
 """
-from typing import Optional
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QTextEdit, QListWidget, QListWidgetItem, QMessageBox,
-    QFileDialog, QSplitter, QGroupBox, QProgressBar,
-    QDialog, QLineEdit, QDialogButtonBox, QApplication
+    QLabel, QListWidget, QListWidgetItem, QMessageBox,
+    QFileDialog, QSplitter, QGroupBox,
+    QDialog, QLineEdit, QDialogButtonBox, QApplication, QSizePolicy
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt, QTimer, QRectF
+from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QBrush
 from word_card import WordCard
 from word_manager import WordManager
 from db_manager import DatabaseManager
 from data_manager import DataManager
 from datetime import datetime, timedelta
+
+
+# 饼图已掌握颜色（与图例一致）
+PIE_MASTERED_COLOR = QColor(78, 205, 196)
+
+# 布局常量（统一边距与间距）
+LAYOUT_MARGIN = 16
+LAYOUT_SPACING = 12
+PANEL_TITLE_FONT_SIZE = 14
+CARD_TITLE_FONT_SIZE = 16
+LEFT_PANEL_MIN_WIDTH = 220
+CARD_PANEL_MIN_WIDTH = 420
+STATS_PANEL_MIN_WIDTH = 200
+
+
+class PieChartWidget(QWidget):
+    """饼状图：显示新单词、待复习、已掌握比例，中心为已掌握占总数的比例"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(180, 180)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._total = 0
+        self._new_count = 0
+        self._review_count = 0
+        self._mastered_count = 0
+    
+    def set_data(self, total, new_count, review_count, mastered_count):
+        self._total = total
+        self._new_count = new_count
+        self._review_count = review_count
+        self._mastered_count = mastered_count
+        self.update()
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        
+        w, h = self.width(), self.height()
+        side = min(w, h) - 10
+        x0 = (w - side) / 2
+        y0 = (h - side) / 2
+        rect = QRectF(x0, y0, side, side)
+        
+        if self._total <= 0:
+            painter.setBrush(QBrush(QColor(200, 200, 200)))
+            painter.setPen(QPen(QColor(160, 160, 160), 1))
+            painter.drawPie(rect, 0, 360 * 16)
+            painter.setPen(QColor(100, 100, 100))
+            painter.drawText(rect, Qt.AlignCenter, '暂无数据')
+            return
+        
+        # 饼图按总单词数比例画，使中心“已掌握%”= 已掌握/总数 与扇形一致
+        total = max(self._total, 1)
+        # 已掌握扇形（占比 = 已掌握/总数）
+        mastered_span = int((self._mastered_count / total) * 360 * 16)
+        # 剩余角度分给 新单词 和 待复习（按二者在“未掌握”中的比例）
+        rest = self._total - self._mastered_count
+        rest_angle = 360 * 16 - mastered_span
+        if rest <= 0:
+            new_span = 0
+            review_span = 0
+        else:
+            new_span = int((self._new_count / rest) * rest_angle)
+            review_span = rest_angle - new_span
+        start_angle = 90 * 16
+        # 绘制顺序：新单词、待复习、已掌握（与之前一致）
+        for color, span in [
+            (QColor(126, 184, 218), new_span),
+            (QColor(255, 138, 128), review_span),
+            (PIE_MASTERED_COLOR, mastered_span),
+        ]:
+            if span <= 0:
+                continue
+            painter.setBrush(QBrush(color))
+            painter.setPen(QPen(QColor(220, 220, 220), 1))
+            painter.drawPie(rect, start_angle, span)
+            start_angle += span
+        
+        # 中心：已掌握比例 = 已掌握数 / 总单词数（与扇形一致）
+        cx, cy = rect.center().x(), rect.center().y()
+        inner_r = side * 0.42
+        inner_rect = QRectF(cx - inner_r, cy - inner_r, inner_r * 2, inner_r * 2)
+        painter.setBrush(QBrush(QColor(0xe2, 0xe0, 0xda)))
+        painter.setPen(QPen(QColor(180, 180, 180), 2))
+        painter.drawEllipse(inner_rect)
+        mastered_pct = round((self._mastered_count / total) * 100)
+        mastered_pct = min(100, max(0, mastered_pct))
+        painter.setPen(QColor(45, 45, 45))
+        font = QFont('Arial', 13, QFont.Bold)
+        painter.setFont(font)
+        painter.drawText(inner_rect, Qt.AlignCenter, f'{mastered_pct}%\n已掌握')
 
 
 class AddWordDialog(QDialog):
@@ -43,7 +134,9 @@ class AddWordDialog(QDialog):
                 padding: 8px;
                 border: 2px solid #ddd;
                 border-radius: 5px;
-                font-size: 12px;
+                font-size: 14px;
+                color: #2d2d2d;
+                background-color: #e2e0da;
             }
             QLineEdit:focus {
                 border: 2px solid #4ecdc4;
@@ -62,9 +155,11 @@ class AddWordDialog(QDialog):
         self.meaning_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px;
-                border: 2px solid #ddd;
+                border: 2px solid #ccc;
                 border-radius: 5px;
-                font-size: 12px;
+                font-size: 14px;
+                color: #2d2d2d;
+                background-color: #e2e0da;
             }
             QLineEdit:focus {
                 border: 2px solid #4ecdc4;
@@ -82,6 +177,88 @@ class AddWordDialog(QDialog):
         
         # 设置焦点到单词输入框
         self.word_input.setFocus()
+        
+        # 回车键确认
+        self.word_input.returnPressed.connect(self.meaning_input.setFocus)
+        self.meaning_input.returnPressed.connect(self.accept)
+        
+    def get_word_and_meaning(self):
+        """获取输入的单词和释义"""
+        word = self.word_input.text().strip()
+        meaning = self.meaning_input.text().strip()
+        return word, meaning
+
+
+class EditWordDialog(QDialog):
+    """编辑单词对话框"""
+    def __init__(self, word, meaning, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('编辑单词')
+        self.setModal(True)
+        self.setMinimumWidth(400)
+        self.init_ui(word, meaning)
+        
+    def init_ui(self, word, meaning):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        
+        # 单词输入
+        word_label = QLabel('单词:')
+        word_label.setFont(QFont('Arial', 11))
+        layout.addWidget(word_label)
+        
+        self.word_input = QLineEdit()
+        self.word_input.setText(word)
+        self.word_input.setFont(QFont('Arial', 12))
+        self.word_input.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                border: 2px solid #ddd;
+                border-radius: 5px;
+                font-size: 14px;
+                color: #2d2d2d;
+                background-color: #e2e0da;
+            }
+            QLineEdit:focus {
+                border: 2px solid #4ecdc4;
+            }
+        """)
+        layout.addWidget(self.word_input)
+        
+        # 释义输入
+        meaning_label = QLabel('释义:')
+        meaning_label.setFont(QFont('Arial', 11))
+        layout.addWidget(meaning_label)
+        
+        self.meaning_input = QLineEdit()
+        self.meaning_input.setText(meaning)
+        self.meaning_input.setFont(QFont('Arial', 12))
+        self.meaning_input.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                border: 2px solid #ccc;
+                border-radius: 5px;
+                font-size: 14px;
+                color: #2d2d2d;
+                background-color: #e2e0da;
+            }
+            QLineEdit:focus {
+                border: 2px solid #4ecdc4;
+            }
+        """)
+        layout.addWidget(self.meaning_input)
+        
+        # 按钮
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+        
+        # 设置焦点到单词输入框并选中所有文本
+        self.word_input.setFocus()
+        self.word_input.selectAll()
         
         # 回车键确认
         self.word_input.returnPressed.connect(self.meaning_input.setFocus)
@@ -113,8 +290,10 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # 主布局
+        # 主布局（统一边距，避免贴边）
         main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(LAYOUT_MARGIN, LAYOUT_MARGIN, LAYOUT_MARGIN, LAYOUT_MARGIN)
+        main_layout.setSpacing(0)
         
         # 左侧：单词列表和操作
         left_panel = self.create_left_panel()
@@ -125,14 +304,17 @@ class MainWindow(QMainWindow):
         # 右侧：统计信息
         stats_panel = self.create_stats_panel()
         
-        # 使用分割器
+        # 分割器：设置最小宽度，保证三栏比例协调
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(left_panel)
         splitter.addWidget(card_panel)
         splitter.addWidget(stats_panel)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 3)  # 单词卡片区域稍宽
+        splitter.setStretchFactor(1, 3)
         splitter.setStretchFactor(2, 1)
+        left_panel.setMinimumWidth(LEFT_PANEL_MIN_WIDTH)
+        card_panel.setMinimumWidth(CARD_PANEL_MIN_WIDTH)
+        stats_panel.setMinimumWidth(STATS_PANEL_MIN_WIDTH)
         
         main_layout.addWidget(splitter)
         
@@ -143,38 +325,39 @@ class MainWindow(QMainWindow):
         """创建左侧面板：单词列表和管理"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(LAYOUT_MARGIN // 2, 0, LAYOUT_MARGIN // 2, 0)
+        layout.setSpacing(LAYOUT_SPACING)
         
-        # 标题
+        # 标题（与右侧统计标题字号一致）
         title = QLabel('单词库')
-        title.setFont(QFont('Arial', 14, QFont.Bold))
+        title.setFont(QFont('Arial', PANEL_TITLE_FONT_SIZE, QFont.Bold))
         layout.addWidget(title)
         
-        # 单词列表（启用虚拟模式以提高性能）
+        # 单词列表
         self.word_list = QListWidget()
+        self.word_list.setMinimumHeight(200)
         self.word_list.itemClicked.connect(self.on_word_selected)
-        # 设置最大显示项数，避免一次性渲染太多项
+        self.word_list.itemDoubleClicked.connect(self.on_word_double_clicked)
         layout.addWidget(self.word_list)
         
-        # 操作按钮组
+        # 操作按钮组（统一间距）
         btn_group = QGroupBox('操作')
+        btn_group.setContentsMargins(LAYOUT_MARGIN // 2, LAYOUT_MARGIN, LAYOUT_MARGIN // 2, LAYOUT_MARGIN // 2)
         btn_layout = QVBoxLayout()
+        btn_layout.setSpacing(8)
         
-        # 添加单词
         btn_add = QPushButton('➕ 添加单词')
         btn_add.clicked.connect(self.add_word)
         btn_layout.addWidget(btn_add)
         
-        # 导入单词
         btn_import = QPushButton('📥 导入单词')
         btn_import.clicked.connect(self.import_words)
         btn_layout.addWidget(btn_import)
         
-        # 删除单词
         btn_delete = QPushButton('🗑️ 删除单词')
         btn_delete.clicked.connect(self.delete_word)
         btn_layout.addWidget(btn_delete)
         
-        # 清空单词库
         btn_clear = QPushButton('🗑️ 清空单词库')
         btn_clear.clicked.connect(self.clear_all_words)
         btn_layout.addWidget(btn_clear)
@@ -187,12 +370,13 @@ class MainWindow(QMainWindow):
     def create_card_panel(self):
         """创建中间面板：单词卡片"""
         panel = QWidget()
-        panel.setMinimumWidth(420)  # 保证卡片有足够宽度
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(LAYOUT_MARGIN, 0, LAYOUT_MARGIN, 0)
+        layout.setSpacing(LAYOUT_SPACING)
         
         # 标题
         title = QLabel('单词卡片')
-        title.setFont(QFont('Arial', 16, QFont.Bold))
+        title.setFont(QFont('Arial', CARD_TITLE_FONT_SIZE, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
         
@@ -201,98 +385,141 @@ class MainWindow(QMainWindow):
         self.word_card.card_flipped.connect(self.on_card_flipped)
         layout.addWidget(self.word_card, stretch=1)
         
-        # 操作按钮（点击卡片可翻转）
+        # 上一个/下一个（居中、等宽、等距）
         btn_layout = QHBoxLayout()
         btn_layout.addStretch(1)
+        
         btn_prev = QPushButton('◀ 上一个')
+        btn_prev.setMinimumWidth(110)
+        btn_prev.setStyleSheet("""
+            QPushButton {
+                background-color: #c0c4c0;
+                color: #2d2d2d;
+                border: 1px solid #a8aca8;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #b4b8b4;
+                border-color: #4ecdc4;
+                color: #1a1a1a;
+            }
+            QPushButton:pressed { background-color: #a8aca8; color: #1a1a1a; }
+            QPushButton:disabled { color: #7a7a7a; background-color: #c8ccc8; }
+        """)
         btn_prev.clicked.connect(self.prev_word)
         btn_layout.addWidget(btn_prev)
-        btn_layout.addSpacing(20)
+        btn_layout.addSpacing(LAYOUT_MARGIN)
+        
         btn_next = QPushButton('下一个 ▶')
+        btn_next.setMinimumWidth(110)
+        btn_next.setStyleSheet("""
+            QPushButton {
+                background-color: #c0c4c0;
+                color: #2d2d2d;
+                border: 1px solid #a8aca8;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #b4b8b4;
+                border-color: #4ecdc4;
+                color: #1a1a1a;
+            }
+            QPushButton:pressed { background-color: #a8aca8; color: #1a1a1a; }
+            QPushButton:disabled { color: #7a7a7a; background-color: #c8ccc8; }
+        """)
         btn_next.clicked.connect(self.next_word)
         btn_layout.addWidget(btn_next)
+        
         btn_layout.addStretch(1)
         layout.addLayout(btn_layout)
         
-        # 记忆反馈按钮
+        self.btn_prev = btn_prev
+        self.btn_next = btn_next
+        
+        # 记忆反馈按钮（居中、等宽、等距）
         feedback_layout = QHBoxLayout()
+        feedback_layout.addStretch(1)
         
         btn_forgot = QPushButton('❌ 忘记')
-        btn_forgot.setStyleSheet("background-color: #ff6b6b; color: white; font-weight: bold; font-size: 14px; padding: 10px;")
+        btn_forgot.setMinimumWidth(180)
+        btn_forgot.setMinimumHeight(60)
+        btn_forgot.setStyleSheet("""
+            QPushButton {
+                background-color: #ff6b6b;
+                color: #fff;
+                font-weight: bold;
+                font-size: 18px;
+                padding: 16px 24px;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover { background-color: #ff5252; }
+            QPushButton:pressed { background-color: #e04545; }
+        """)
         btn_forgot.clicked.connect(self.rate_word_forgot)
         feedback_layout.addWidget(btn_forgot)
+        feedback_layout.addSpacing(LAYOUT_MARGIN)
         
         btn_mastered = QPushButton('✅ 掌握')
-        btn_mastered.setStyleSheet("background-color: #4ecdc4; color: white; font-weight: bold; font-size: 14px; padding: 10px;")
+        btn_mastered.setMinimumWidth(180)
+        btn_mastered.setMinimumHeight(60)
+        btn_mastered.setStyleSheet("""
+            QPushButton {
+                background-color: #4ecdc4;
+                color: #fff;
+                font-weight: bold;
+                font-size: 18px;
+                padding: 16px 24px;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover { background-color: #45b7aa; }
+            QPushButton:pressed { background-color: #3da99e; }
+        """)
         btn_mastered.clicked.connect(self.rate_word_mastered)
-        btn_mastered.setEnabled(True)  # 确保按钮启用
+        btn_mastered.setEnabled(True)
         feedback_layout.addWidget(btn_mastered)
+        feedback_layout.addStretch(1)
         
         layout.addLayout(feedback_layout)
         
         return panel
         
     def create_stats_panel(self):
-        """创建右侧面板：统计信息"""
+        """创建右侧面板：学习统计图示"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(LAYOUT_MARGIN // 2, 0, LAYOUT_MARGIN // 2, 0)
+        layout.setSpacing(LAYOUT_SPACING)
         
-        # 标题
+        # 标题（与左侧标题字号一致）
         title = QLabel('学习统计')
-        title.setFont(QFont('Arial', 14, QFont.Bold))
+        title.setFont(QFont('Arial', PANEL_TITLE_FONT_SIZE, QFont.Bold))
         layout.addWidget(title)
         
-        # 总览信息组（新增）
-        overview_group = QGroupBox('总览')
-        overview_layout = QVBoxLayout()
-        
-        self.label_total_words = QLabel('总单词数: 0')
+        # 总单词数
+        self.label_total_words = QLabel('共 0 个单词')
         self.label_total_words.setFont(QFont('Arial', 12, QFont.Bold))
-        overview_layout.addWidget(self.label_total_words)
+        layout.addWidget(self.label_total_words)
         
-        self.label_total_mastered = QLabel('总掌握数: 0')
-        self.label_total_mastered.setFont(QFont('Arial', 12, QFont.Bold))
-        overview_layout.addWidget(self.label_total_mastered)
+        # 饼状图（固定比例，避免被拉得过扁）
+        self.pie_chart = PieChartWidget(self)
+        self.pie_chart.setMinimumSize(180, 180)
+        layout.addWidget(self.pie_chart)
         
-        overview_group.setLayout(overview_layout)
-        layout.addWidget(overview_group)
-        
-        # 统计信息组
-        stats_group = QGroupBox('今日学习')
-        stats_layout = QVBoxLayout()
-        
-        self.label_total = QLabel('总单词数: 0')
-        stats_layout.addWidget(self.label_total)
-        
-        self.label_new = QLabel('新单词: 0')
-        stats_layout.addWidget(self.label_new)
-        
-        self.label_review = QLabel('待复习: 0')
-        stats_layout.addWidget(self.label_review)
-        
-        self.label_mastered = QLabel('已掌握: 0')
-        stats_layout.addWidget(self.label_mastered)
-        
-        # 进度条
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximum(100)
-        stats_layout.addWidget(self.progress_bar)
-        
-        stats_group.setLayout(stats_layout)
-        layout.addWidget(stats_group)
-        
-        # 学习记录组
-        record_group = QGroupBox('最近学习')
-        record_layout = QVBoxLayout()
-        
-        self.record_text = QTextEdit()
-        self.record_text.setReadOnly(True)
-        self.record_text.setMaximumHeight(200)
-        record_layout.addWidget(self.record_text)
-        
-        record_group.setLayout(record_layout)
-        layout.addWidget(record_group)
-        
+        # 图例（与饼图对齐）
+        self.legend_mastered = QLabel('■ 已掌握 0')
+        self.legend_mastered.setStyleSheet(
+            "color: #2d7a73; font-size: 12px; font-weight: bold;"
+        )
+        self.legend_mastered.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.legend_mastered)
         layout.addStretch()
         
         return panel
@@ -324,44 +551,14 @@ class MainWindow(QMainWindow):
         # 从数据库加载当前索引
         self.word_manager.current_index = self.db_manager.get_current_index()
         
-        # 延迟加载学习记录（非关键数据）
-        QTimer.singleShot(200, self.load_review_history)
-        
         # 更新显示
         self.update_display()
         self.statusBar().showMessage('就绪')
     
-    def load_data(self):
-        """加载数据（保留用于兼容性）"""
-        self.load_data_async()
-        
     def save_data(self):
-        """保存数据 - 数据库会自动保存，这里只需要保存当前索引"""
-        # 当前索引已经在设置时自动保存到数据库
-        # 这个方法保留用于兼容性
+        """兼容接口：数据由数据库自动保存，当前索引在切换时已保存"""
         pass
     
-    def load_review_history(self):
-        """加载学习记录到界面"""
-        history = self.db_manager.get_review_history(limit=50)
-        self.record_text.clear()
-        rating_map = {1: '忘记', 2: '掌握'}
-        for record in reversed(history):  # 反转以显示最新的在前面
-            word = record.get('word', '')
-            rating = record.get('rating', 0)
-            review_time = record.get('review_time', '')
-            rating_text = rating_map.get(rating, '未知')
-            
-            # 格式化时间
-            try:
-                dt = datetime.fromisoformat(review_time) if isinstance(review_time, str) else review_time
-                time_str = dt.strftime('%H:%M') if isinstance(dt, datetime) else str(review_time)
-            except (ValueError, TypeError):
-                time_str = str(review_time)
-            
-            record_line = f"{time_str} - {word}: {rating_text}\n"
-            self.record_text.append(record_line)
-        
     def update_display(self):
         """更新显示"""
         # 获取单词列表（使用缓存，避免重复查询）
@@ -423,25 +620,23 @@ class MainWindow(QMainWindow):
         mastered_count = stats['mastered_count']
         total_mastered = stats['total_mastered']
         
-        # 更新总览信息
-        self.label_total_words.setText(f'总单词数: {total}')
-        self.label_total_mastered.setText(f'总掌握数: {total_mastered}')
-        
-        # 更新今日学习信息
-        self.label_total.setText(f'总单词数: {total}')
-        self.label_new.setText(f'新单词: {new_count}')
-        self.label_review.setText(f'待复习: {review_count}')
-        self.label_mastered.setText(f'已掌握: {mastered_count}')
-        
-        if total > 0:
-            progress = int((mastered_count / total) * 100)
-            self.progress_bar.setValue(progress)
+        # 更新统计饼图（用 total_mastered 表示“已掌握或暂不需复习”，评价后比例会立即变化）
+        self.label_total_words.setText(f'共 {total} 个单词')
+        self.pie_chart.set_data(total, new_count, review_count, total_mastered)
+        self.legend_mastered.setText(f'■ 已掌握 {total_mastered}')
         
         # 显示当前单词卡片
         if words:
             self.show_current_card()
         else:
             self.word_card.set_word("", "请添加单词开始学习")
+        
+        # 更新上一个/下一个按钮状态
+        n = len(words)
+        idx = self.word_manager.current_index
+        if hasattr(self, 'btn_prev') and hasattr(self, 'btn_next'):
+            self.btn_prev.setEnabled(n > 1 and idx > 0)
+            self.btn_next.setEnabled(n > 1 and idx < n - 1)
             
     def show_current_card(self):
         """显示当前单词卡片"""
@@ -464,6 +659,12 @@ class MainWindow(QMainWindow):
         row = self.word_list.row(item)
         self.word_manager.current_index = row
         self.show_current_card()
+    
+    def on_word_double_clicked(self, item):
+        """单词列表项双击事件 - 编辑单词"""
+        row = self.word_list.row(item)
+        self.word_manager.current_index = row
+        self.edit_word()
         
     def on_card_flipped(self, is_flipped):
         """卡片翻转事件"""
@@ -543,9 +744,7 @@ class MainWindow(QMainWindow):
             if current_idx < word_count:
                 self.word_manager.current_index = current_idx
             
-            # 延迟重新加载学习记录（非关键操作）
-            QTimer.singleShot(100, self.load_review_history)
-            
+
             # 立即更新显示（在切换到下一个单词之前）
             self.update_display()
             QApplication.processEvents()
@@ -582,6 +781,41 @@ class MainWindow(QMainWindow):
                 self.update_display()
                 self.statusBar().showMessage(f'已添加: {word}')
         
+    def edit_word(self):
+        """编辑单词"""
+        if not self.word_manager.words:
+            QMessageBox.warning(self, '警告', '单词库为空')
+            return
+        
+        word_data = self.word_manager.get_current_word()
+        if not word_data:
+            return
+        
+        dialog = EditWordDialog(word_data['word'], word_data['meaning'], self)
+        if dialog.exec_() == QDialog.Accepted:
+            new_word, new_meaning = dialog.get_word_and_meaning()
+            if not new_word or not new_meaning:
+                QMessageBox.warning(self, '输入错误', '单词和释义不能为空！')
+                return
+            
+            # 检查新单词是否与其他单词重复（排除当前单词）
+            word_id = word_data.get('id')
+            if word_id:
+                # 检查是否与其他单词重复
+                existing_word = self.db_manager.get_word_by_id(word_id)
+                if existing_word and new_word.lower() != existing_word['word'].lower():
+                    # 如果单词改变了，检查是否与其他单词重复
+                    if self.db_manager.word_exists(new_word):
+                        QMessageBox.information(self, '提示', f'单词 "{new_word}" 已存在')
+                        return
+                
+                # 更新单词和释义
+                self.db_manager.update_word(word_id, word=new_word, meaning=new_meaning)
+                self.word_manager._invalidate_cache()  # 清除缓存
+                self.save_data()
+                self.update_display()
+                self.statusBar().showMessage(f'已更新: {new_word}')
+    
     def delete_word(self):
         """删除单词"""
         if not self.word_manager.words:
@@ -618,7 +852,6 @@ class MainWindow(QMainWindow):
             self.word_manager._invalidate_cache()
             self.update_display()
             self.word_card.set_word('', '')
-            self.record_text.clear()
             self.statusBar().showMessage('已清空单词库')
             
     def import_words(self):

@@ -22,11 +22,11 @@ class WordCard(QWidget):
     """
     
     CARD_WORD_STYLE = CARD_BASE_STYLE.format(
-        "background-color: white; font-size: 32px; color: #2c3e50;"
+        "background-color: #e4e2dc; font-size: 28px; font-weight: bold; color: #2d2d2d;"
     )
     
     CARD_MEANING_STYLE = CARD_BASE_STYLE.format(
-        "background-color: #f0f8ff; font-size: 20px; color: #333;"
+        "background-color: #dce0de; font-size: 18px; color: #2d2d2d;"
     )
     
     def __init__(self):
@@ -55,7 +55,7 @@ class WordCard(QWidget):
         # 提示文字
         self.hint_label = QLabel('点击卡片查看释义')
         self.hint_label.setAlignment(Qt.AlignCenter)
-        self.hint_label.setStyleSheet("color: #888; font-size: 12px;")
+        self.hint_label.setStyleSheet("color: #5a5a5a; font-size: 13px;")
         layout.addWidget(self.hint_label)
     
     def mousePressEvent(self, event):

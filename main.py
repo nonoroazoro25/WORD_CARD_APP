@@ -6,7 +6,6 @@
 import sys
 import logging
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt
 from app_paths import get_app_data_dir
 from main_window import MainWindow
 
@@ -26,8 +25,19 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("单词卡片")
     
-    # 设置应用样式
+    # 设置应用样式：护眼柔和背景，减少刺眼
     app.setStyle('Fusion')
+    app.setStyleSheet("""
+        QWidget { background-color: #d0d4d0; color: #2d2d2d; }
+        QLabel { color: #2d2d2d; font-size: 13px; }
+        QGroupBox { color: #2d2d2d; font-size: 13px; font-weight: bold; }
+        QGroupBox::title { color: #2d2d2d; }
+        QPushButton { color: #2d2d2d; font-size: 13px; }
+        QLineEdit { color: #2d2d2d; font-size: 14px; background-color: #e2e0da; }
+        QListWidget { color: #2d2d2d; font-size: 13px; background-color: #e2e0da; }
+        QTextEdit { color: #2d2d2d; font-size: 13px; background-color: #e2e0da; }
+        QProgressBar { color: #2d2d2d; }
+    """)
     
     window = MainWindow()
     window.show()
