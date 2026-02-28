@@ -319,10 +319,10 @@ class DatabaseManager:
             new_count = cursor.fetchone()[0]
             
             # 待复习数量（next_review <= today 或 next_review IS NULL）
-            # 使用 DATE() 函数只比较日期部分，因为 next_review 存储的是完整 ISO 时间戳
+            # 用 SUBSTR(next_review,1,10) 取日期部分，避免 SQLite 对 ISO 带 T 格式解析不一致（重启后统计不准）
             cursor.execute('''
                 SELECT COUNT(*) FROM words 
-                WHERE next_review IS NULL OR DATE(next_review) <= ?
+                WHERE next_review IS NULL OR SUBSTR(next_review, 1, 10) <= ?
             ''', (today,))
             review_count = cursor.fetchone()[0]
             
@@ -330,11 +330,10 @@ class DatabaseManager:
             cursor.execute('SELECT COUNT(*) FROM words WHERE mastered = 1')
             mastered_count = cursor.fetchone()[0]
             
-            # 总掌握数（mastered=1 或 next_review > today）
-            # 使用 DATE() 函数只比较日期部分
+            # 总掌握数（mastered=1 或 next_review 的日期 > today）
             cursor.execute('''
                 SELECT COUNT(*) FROM words 
-                WHERE mastered = 1 OR (next_review IS NOT NULL AND DATE(next_review) > ?)
+                WHERE mastered = 1 OR (next_review IS NOT NULL AND SUBSTR(next_review, 1, 10) > ?)
             ''', (today,))
             total_mastered = cursor.fetchone()[0]
             
